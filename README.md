@@ -1,4 +1,4 @@
-File-Shredder
+#File-Shredder
 =============
 
 A C++ program to shred files and folders securely.
