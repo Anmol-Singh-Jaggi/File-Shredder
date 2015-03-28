@@ -13,4 +13,4 @@ A C++ program to shred files and folders securely.
 - Asks for confirmation before shredding a file.
 - Creates a log entry for every file being shredded.
 
-**Caution - Files once shred cannot be recovered !!**
+**Files once shred cannot be recovered !! Use with extreme caution !!**
