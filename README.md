@@ -7,7 +7,7 @@ A C++ program to shred files and folders securely.
  - A compiler supporting C++ 11
  - The [Boost][1] [filesystem][2] library.
  
-***Features*** -
+***Features -:***
 
 - Renames files to random strings before shredding them.
 - Asks for confirmation before shredding a file.
