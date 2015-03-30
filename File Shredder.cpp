@@ -35,12 +35,11 @@ string GenerateRandomFileName()
 path RandomRename( const path& inputPath )
 {
 	const size_t maxRenameAttempts = 10;
-	string newName;
 	size_t attempts = 0;
 	boost::system::error_code ec;
 	while ( attempts < maxRenameAttempts )
 	{
-		newName = GenerateRandomFileName();
+		string newName = GenerateRandomFileName();
 		path newPath = inputPath.parent_path() / newName;
 		if ( !exists( newPath ) )
 		{
@@ -67,8 +66,7 @@ void WriteRandomData( const path& inputPath )
 	if ( !fout )
 	{
 		const string errorMsg = "Error opening " + absolute( inputPath ).string() + " : " + strerror( errno );
-		LogErrorStream << errorMsg << endl;
-		return;
+		throw errorMsg;
 	}
 
 	int iterations = 5;
@@ -117,7 +115,12 @@ void ShredFile( const path& inputPath )
 	catch ( const filesystem_error& ex )
 	{
 		LogErrorStream << ex.what() << endl;
-		return; // Not able to write random data. Abort !
+		return;
+	}
+	catch ( const string& errorMsg ) // Exceptions thrown by me
+	{
+		LogErrorStream << errorMsg << endl;
+		return;
 	}
 
 	path newPath;
