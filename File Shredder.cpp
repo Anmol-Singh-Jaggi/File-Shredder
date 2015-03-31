@@ -23,7 +23,7 @@ static void DirectoryIterate( const path& dirPath, vector<path>& dirContents )
 	}
 }
 
-// Generate a random file name
+// Generates a random file name
 static string GenerateRandomFileName()
 {
 	const size_t maxFileNameLength = 19;
@@ -37,10 +37,13 @@ static string GenerateRandomFileName()
 	return fileName;
 }
 
-// Rename the input file to a random string
+// Renames the input file to a random string
 static path RandomRename( const path& inputPath )
 {
-	const size_t maxRenameAttempts = 10;
+	const size_t maxRenameAttempts = 10; // Max number of attempts to make in renaming a file.
+	                                     // It is possible that the random filename generator returns a name
+	                                     // which is same as that of a file in the current directory,
+	                                     // or is a reserved filename ( like "com1" on windows )
 	size_t attempts = 0;
 	while ( attempts < maxRenameAttempts )
 	{
@@ -64,6 +67,7 @@ static path RandomRename( const path& inputPath )
 }
 
 // Overwrite the input file with random data
+// Returns true if successful, false otherwise
 static bool WriteRandomData( const path& inputPath )
 {
 	boost::system::error_code ec;
@@ -149,6 +153,7 @@ static void ShredFile( const path& inputPath )
 }
 
 // Confirm shredding a file
+// Returns true if the user confirms, false otherwise
 static bool ConfirmShred( const path& inputPath )
 {
 	cout << "Shred " << absolute( inputPath ) << " ? ( y/n ) ";
