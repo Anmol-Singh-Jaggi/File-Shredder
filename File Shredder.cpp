@@ -14,6 +14,7 @@ using namespace boost::filesystem;
 static ofstream Log;
 static stringstream LogErrorStream;  // Buffer soft errors to output them separately after the informational messages in the log file.
 
+// Iterate through a directory and store everything found ( regular files, directories or any other special files ) in the input container
 static void DirectoryIterate( const path& dirPath, vector<path>& dirContents )
 {
 	if ( is_directory( dirPath ) )
@@ -22,6 +23,7 @@ static void DirectoryIterate( const path& dirPath, vector<path>& dirContents )
 	}
 }
 
+// Generate a random file name
 static string GenerateRandomFileName()
 {
 	const size_t maxFileNameLength = 19;
@@ -35,6 +37,7 @@ static string GenerateRandomFileName()
 	return fileName;
 }
 
+// Rename the input file to a random string
 static path RandomRename( const path& inputPath )
 {
 	const size_t maxRenameAttempts = 10;
@@ -60,6 +63,7 @@ static path RandomRename( const path& inputPath )
 	return inputPath;
 }
 
+// Overwrite the input file with random data
 static bool WriteRandomData( const path& inputPath )
 {
 	boost::system::error_code ec;
@@ -127,6 +131,7 @@ static bool WriteRandomData( const path& inputPath )
 	return true;
 }
 
+// Shred a file
 static void ShredFile( const path& inputPath )
 {
 	if ( !WriteRandomData( inputPath ) )
@@ -143,6 +148,7 @@ static void ShredFile( const path& inputPath )
 	}
 }
 
+// Confirm shredding a file
 static bool ConfirmShred( const path& inputPath )
 {
 	cout << "Shred " << absolute( inputPath ) << " ? ( y/n ) ";
@@ -154,6 +160,7 @@ static bool ConfirmShred( const path& inputPath )
 	return confirm;
 }
 
+// Shred a file/folder
 static void Shred( const path& inputPath )
 {
 	Log << absolute( inputPath ) << endl;
@@ -178,13 +185,13 @@ static void Shred( const path& inputPath )
 		}
 
 		ec.clear();
-		remove( inputPath, ec );
+		remove( inputPath, ec ); // Remove the directory itself. Will fail if its not empty.
 		if ( ec )
 		{
 			LogErrorStream << "Failure in removing " << absolute( inputPath ) << " : " << ec.message() << endl;
 		}
 	}
-	else
+	else // is a file
 	{
 		if ( ec )
 		{
