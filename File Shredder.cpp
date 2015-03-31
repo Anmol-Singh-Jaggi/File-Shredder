@@ -5,24 +5,27 @@
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
-#include <boost/filesystem.hpp>
+#define BOOST_FILESYSTEM_NO_DEPRECATED
+#include "boost/filesystem.hpp"
 
 using namespace std;
 using namespace boost::filesystem;
 
-const path LogFileName = "ShredderLog.txt";
-ofstream Log;
-stringstream LogErrorStream;  // Buffer soft errors to output them separately after the informational messages in the log file.
+static ofstream Log;
+static stringstream LogErrorStream;  // Buffer soft errors to output them separately after the informational messages in the log file.
 
-void DirectoryRecursiveIterate( const path& dirPath, vector<path>& dirContents )
+static void DirectoryIterate( const path& dirPath, vector<path>& dirContents )
 {
-	copy( recursive_directory_iterator( dirPath ), recursive_directory_iterator(), back_inserter( dirContents ) );
+	if ( is_directory( dirPath ) )
+	{
+		copy( directory_iterator( dirPath ), directory_iterator(), back_inserter( dirContents ) );
+	}
 }
 
-string GenerateRandomFileName()
+static string GenerateRandomFileName()
 {
 	const size_t maxFileNameLength = 19;
-	size_t fileNameLength = ( rand() % maxFileNameLength ) + 1;
+	const size_t fileNameLength = ( rand() % maxFileNameLength ) + 1;
 	const string acceptedFileNameCharacters = "0123456789abcdefghijklmnopqrstuvwxyz";
 	string fileName( fileNameLength, '*' );
 	for ( auto& c : fileName )
@@ -32,21 +35,20 @@ string GenerateRandomFileName()
 	return fileName;
 }
 
-path RandomRename( const path& inputPath )
+static path RandomRename( const path& inputPath )
 {
 	const size_t maxRenameAttempts = 10;
 	size_t attempts = 0;
-	boost::system::error_code ec;
 	while ( attempts < maxRenameAttempts )
 	{
-		string newName = GenerateRandomFileName();
-		path newPath = inputPath.parent_path() / newName;
+		const path newPath = inputPath.parent_path() / GenerateRandomFileName();
 		if ( !exists( newPath ) )
 		{
+			boost::system::error_code ec;
 			rename( inputPath, newPath, ec );
 			if ( ec ) // Maybe a reserved filename was generated
 			{
-				LogErrorStream << "Error renaming " << absolute( inputPath ) << " to " << absolute( newPath ) << " : " << ec.message() << endl;
+				LogErrorStream << "Failure in renaming " << absolute( inputPath ) << " to " << absolute( newPath ) << " : " << ec.message() << endl;
 			}
 			else // No error
 			{
@@ -58,166 +60,170 @@ path RandomRename( const path& inputPath )
 	return inputPath;
 }
 
-void WriteRandomData( const path& inputPath )
+static bool WriteRandomData( const path& inputPath )
 {
-	auto inputFileSize = file_size( inputPath );
+	boost::system::error_code ec;
+	const auto inputFileSize = file_size( inputPath, ec );
+	if ( ec )
+	{
+		LogErrorStream << "Failure in determining the size of " << absolute( inputPath ) << " : "  << ec.message() << endl;
+		return false;
+	}
 
 	ofstream fout( inputPath.string(), ios::binary );
 	if ( !fout )
 	{
-		const string errorMsg = "Error opening " + absolute( inputPath ).string() + " : " + strerror( errno );
-		throw errorMsg;
+		LogErrorStream << "Failure in opening " << absolute( inputPath ) << " : " << strerror( errno ) << endl;
+		return false;
 	}
 
-	int iterations = 5;
+	vector<unsigned char> buffer( inputFileSize );
 
-	vector<unsigned char> buffer( ( size_t )inputFileSize );
+	////////////////////////////////////////////////////////////////////
+	// Overwrite file with ASCII 255 and ASCII 0 multiple times alternatingly
+	int iterations = 5;
 	while ( iterations -- )
 	{
 		unsigned char c = ( iterations & 1 ) ? 255 : 0;
-		for ( decltype( inputFileSize ) i = 0; i < inputFileSize; i++ )
+		for ( auto& bufferElement : buffer )
 		{
-			buffer[( size_t )i] = c;
+			bufferElement = c;
 		}
 		fout.seekp( 0, ios::beg );
-		fout.write( ( char* )&buffer[0], buffer.size() ); // Overwrite file with ASCII 255 and ASCII 0
+		fout.write( ( char* )&buffer[0], buffer.size() );
 		fout.flush();
 	}
+	////////////////////////////////////////////////////////////////////
 
-	fout.seekp( 0, ios::beg );
-	for ( decltype( inputFileSize ) i = 0; i < inputFileSize; i++ )
+	////////////////////////////////////////////////////////////////////
+	// Overwrite file with random characters
+	for ( auto& bufferElement : buffer )
 	{
-		buffer[( size_t )i] = rand() % 128;
+		bufferElement = rand() % 128;
 	}
-	fout.write( ( char* )&buffer[0], buffer.size() ); // Overwrite file with random characters
+	fout.seekp( 0, ios::beg );
+	fout.write( ( char* )&buffer[0], buffer.size() );
 	fout.flush();
+	////////////////////////////////////////////////////////////////////
 
-	fout.seekp( 0, ios::beg );
-	for ( decltype( inputFileSize ) i = 0; i < inputFileSize; i++ )
+	////////////////////////////////////////////////////////////////////
+	// Overwrite file with null characters
+	for ( auto& bufferElement : buffer )
 	{
-		buffer[( size_t )i] = 0;
+		bufferElement = 0;
 	}
-	fout.write( ( char* )&buffer[0], buffer.size() ); // Overwrite file with Null characters
+	fout.seekp( 0, ios::beg );
+	fout.write( ( char* )&buffer[0], buffer.size() );
 	fout.flush();
+	////////////////////////////////////////////////////////////////////
+
+	////////////////////////////////////////////////////////////////////
+	// Change file size to 0
+	fout.close();
+	fout.open( inputPath.string(), ios::binary );
+	////////////////////////////////////////////////////////////////////
 
 	fout.close();
-
-	fout.open( inputPath.string(), ios::binary ); // Changes the file size to 0
-	fout.close();
+	return true;
 }
 
-void ShredFile( const path& inputPath )
+static void ShredFile( const path& inputPath )
 {
-	try
+	if ( !WriteRandomData( inputPath ) )
 	{
-		WriteRandomData( inputPath );
-	}
-	catch ( const filesystem_error& ex )
-	{
-		LogErrorStream << ex.what() << endl;
-		return;
-	}
-	catch ( const string& errorMsg ) // Exceptions thrown by me
-	{
-		LogErrorStream << errorMsg << endl;
 		return;
 	}
 
-	path newPath;
-	try
+	path newPath = RandomRename( inputPath );
+	boost::system::error_code ec;
+	remove( newPath, ec );
+	if ( ec )
 	{
-		newPath = RandomRename( inputPath );
+		LogErrorStream << "Failure in removing " << newPath << " : " << ec.message() << endl;
 	}
-	catch ( const filesystem_error& ex )
-	{
-		LogErrorStream << ex.what() << endl;
-		// Not exiting here because success in renaming a file is not vital to shredding it.
-	}
-
-	try
-	{
-		remove( newPath );
-	}
-	catch ( const filesystem_error& ex )
-	{
-		LogErrorStream << ex.what() << endl;
-	}
-
 }
 
-void Shred( const path& inputPath )
+static bool ConfirmShred( const path& inputPath )
+{
+	cout << "Shred " << absolute( inputPath ) << " ? ( y/n ) ";
+	bool confirm = ( cin.get() == 'y' );
+
+	// Clear any trailing input
+	cin.clear();
+	cin.ignore( numeric_limits<streamsize>::max(), '\n' );
+	return confirm;
+}
+
+static void Shred( const path& inputPath )
 {
 	Log << absolute( inputPath ) << endl;
-	if ( exists( inputPath ) )
+
+	boost::system::error_code ec;
+	if ( is_directory( inputPath, ec ) )
 	{
-		if ( is_directory( inputPath ) )
+		vector<path> dirContents;
+		try
 		{
-			vector<path> dirContents;
-			try
-			{
-				DirectoryRecursiveIterate( inputPath, dirContents );
-			}
-			catch ( const filesystem_error& ex )
-			{
-				LogErrorStream << ex.what() << endl;
-				return; // Not able to list the directory's contents. No point in going forward.
-			}
-
-			for ( const auto& item : dirContents )
-			{
-				if ( !is_directory( item ) )
-				{
-					cout << "Shred " << absolute( item ) << " ? ( y/n ) ";
-					if ( cin.get() == 'y' )
-					{
-						Log << absolute( item ) << endl;
-						ShredFile( item );
-					}
-					else
-					{
-						Log << "Skipping " << absolute( item ) << endl;
-					}
-
-					// Clear any redundant input
-					cin.clear();
-					cin.ignore( numeric_limits<streamsize>::max(), '\n' );
-				}
-			}
-			try
-			{
-				remove( inputPath );
-			}
-			catch ( const filesystem_error& ex )
-			{
-				LogErrorStream << ex.what() << endl;
-			}
+			DirectoryIterate( inputPath, dirContents );
 		}
-		else
+		catch ( const filesystem_error& ex )
 		{
-			ShredFile( inputPath );
+			LogErrorStream << ex.what() << endl;
+			return; // Not able to list the directory's contents. No point in proceeding further.
+		}
+
+		for ( const auto& item : dirContents )
+		{
+			Shred( item );
+		}
+
+		ec.clear();
+		remove( inputPath, ec );
+		if ( ec )
+		{
+			LogErrorStream << "Failure in removing " << absolute( inputPath ) << " : " << ec.message() << endl;
 		}
 	}
 	else
 	{
-		LogErrorStream << "Error : " << inputPath << " does not exist !" << endl;
+		if ( ec )
+		{
+			LogErrorStream << "Failure in determining if " << absolute( inputPath ) << " is a directory or not : " << ec.message() << endl;
+			return;
+		}
+		else
+		{
+
+			if ( ConfirmShred( inputPath ) )
+			{
+				ShredFile( inputPath );
+			}
+			else
+			{
+				Log << "Skipping " << absolute( inputPath ) << endl;
+			}
+		}
 	}
 }
 
-int main( )
+int main( int argc, char** argv )
 {
-	string inputPath;
-	cout << "Enter path to shred -:\n";
-	getline( cin, inputPath );
-
-	cout << "\n";
-
-	Log.open( LogFileName.string() );
-	if ( !Log )
+	const string defaultLogFilePath = "DirectorySnapshotLog.txt";
+	if ( argc < 2 )
 	{
-		cerr << "Error creating " << absolute( LogFileName ) << " : " << strerror( errno ) << endl;
+		cout << "Usage : " << argv[0] << " <input_path> [log_file_path=" << defaultLogFilePath << "]\n";
+		return -1;
 	}
 
-	Shred( inputPath );
+	const path LogFilePath = ( ( argc >= 3 ) ? path( argv[2] ) :  defaultLogFilePath );
+	Log.open( LogFilePath.string() );
+	if ( !Log )
+	{
+		cerr << "Error creating " << absolute( LogFilePath ) << " : " << strerror( errno ) << endl;
+		return -1;
+	}
+
+	Shred( argv[1] );
 
 	if ( Log )
 	{
@@ -228,7 +234,8 @@ int main( )
 		else
 		{
 			Log << "\nERRORS -:\n\n" << LogErrorStream.str() << endl;
-			cout << "There were some errors during the execution of this program !\n\nCheck " << absolute( LogFileName ) << " for details.\n";
+			cout << "There were some errors during the execution of this program !\n\nCheck " << absolute( LogFilePath ) << " for details.\n";
+			return -1;
 		}
 	}
 }
