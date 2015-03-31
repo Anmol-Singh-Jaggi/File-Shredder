@@ -208,7 +208,7 @@ static void Shred( const path& inputPath )
 
 int main( int argc, char** argv )
 {
-	const path defaultLogFilePath = "DirectorySnapshotLog.txt";
+	const path defaultLogFilePath = "FileShredderLog.txt";
 	if ( argc < 2 )
 	{
 		cout << "Usage : " << argv[0] << " <input_path> [log_file_path=" << defaultLogFilePath << "]\n";
