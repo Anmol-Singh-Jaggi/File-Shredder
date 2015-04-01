@@ -6,7 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #define BOOST_FILESYSTEM_NO_DEPRECATED
-#include "boost/filesystem.hpp"
+#include <boost/filesystem.hpp>
 
 using namespace std;
 using namespace boost::filesystem;
@@ -190,37 +190,33 @@ static void Shred( const path& inputPath )
 		}
 
 		ec.clear();
-		remove( inputPath, ec ); // Remove the directory itself. Will fail if its not empty.
+		remove( inputPath, ec ); // Remove the input directory itself.. Will fail if not empty
 		if ( ec )
 		{
 			LogErrorStream << "Failure in removing " << absolute( inputPath ) << " : " << ec.message() << endl;
 		}
 	}
-	else // is a file
+	else if ( !ec ) // input is a file
 	{
-		if ( ec )
+		if ( ConfirmShred( inputPath ) )
 		{
-			LogErrorStream << "Failure in determining if " << absolute( inputPath ) << " is a directory or not : " << ec.message() << endl;
-			return;
+			ShredFile( inputPath );
 		}
 		else
 		{
-
-			if ( ConfirmShred( inputPath ) )
-			{
-				ShredFile( inputPath );
-			}
-			else
-			{
-				Log << "Skipping " << absolute( inputPath ) << endl;
-			}
+			Log << "Skipping " << absolute( inputPath ) << endl;
 		}
+	}
+	else
+	{
+		LogErrorStream << "Failure in determining if " << absolute( inputPath ) << " is a directory or not : " << ec.message() << endl;
 	}
 }
 
 int main( int argc, char** argv )
 {
 	const path defaultLogFilePath = "FileShredderLog.txt";
+	
 	if ( argc < 2 )
 	{
 		cout << "Usage : " << argv[0] << " <input_path> [log_file_path=" << defaultLogFilePath << "]\n";
