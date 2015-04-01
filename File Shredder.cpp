@@ -88,7 +88,7 @@ static bool WriteRandomData( const path& inputPath )
 	vector<unsigned char> buffer( inputFileSize );
 
 	////////////////////////////////////////////////////////////////////
-	// Overwrite file with ASCII 255 and ASCII 0 multiple times alternatingly
+	// Overwrite file with ASCII 255 and ASCII 0 multiple times alternately
 	int iterations = 5;
 	while ( iterations -- )
 	{
