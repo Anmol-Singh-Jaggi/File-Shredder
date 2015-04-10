@@ -26,24 +26,16 @@ static void DirectoryIterate( const path& dirPath, vector<path>& dirContents )
 // Generates a random file name
 static string GenerateRandomFileName()
 {
-	const size_t maxFileNameLength = 19;
-	const size_t fileNameLength = ( rand() % maxFileNameLength ) + 1;
-	const string acceptedFileNameCharacters = "0123456789abcdefghijklmnopqrstuvwxyz";
-	string fileName( fileNameLength, '*' );
-	for ( auto& c : fileName )
-	{
-		c = acceptedFileNameCharacters[rand() % acceptedFileNameCharacters.length()];
-	}
-	return fileName;
+	return unique_path().string();
 }
 
 // Renames the input file to a random string
 static path RandomRename( const path& inputPath )
 {
 	const size_t maxRenameAttempts = 10; // Max number of attempts to make in renaming a file.
-	                                     // It is possible that the random filename generator returns a name
-	                                     // which is same as that of a file in the current directory,
-	                                     // or is a reserved filename ( like "com1" on windows )
+	// It is possible that the random filename generator returns a name
+	// which is same as that of a file in the current directory,
+	// or is a reserved filename ( like "com1" on windows )
 	size_t attempts = 0;
 	while ( attempts < maxRenameAttempts )
 	{
@@ -92,7 +84,7 @@ static bool WriteRandomData( const path& inputPath )
 	int iterations = 5;
 	while ( iterations -- )
 	{
-		unsigned char c = ( iterations & 1 ) ? 255 : 0;
+		const unsigned char c = ( iterations & 1 ) ? 255 : 0;
 		for ( auto& bufferElement : buffer )
 		{
 			bufferElement = c;
@@ -143,7 +135,7 @@ static void ShredFile( const path& inputPath )
 		return;
 	}
 
-	path newPath = RandomRename( inputPath );
+	const path newPath = RandomRename( inputPath );
 	boost::system::error_code ec;
 	remove( newPath, ec );
 	if ( ec )
@@ -157,7 +149,7 @@ static void ShredFile( const path& inputPath )
 static bool ConfirmShred( const path& inputPath )
 {
 	cout << "Shred " << absolute( inputPath ) << " ? ( y/n ) ";
-	bool confirm = ( cin.get() == 'y' );
+	const bool confirm = ( cin.get() == 'y' );
 
 	// Clear any trailing input
 	cin.clear();
@@ -216,7 +208,7 @@ static void Shred( const path& inputPath )
 int main( int argc, char** argv )
 {
 	const path defaultLogFilePath = "FileShredderLog.txt";
-	
+
 	if ( argc < 2 )
 	{
 		cout << "Usage : " << argv[0] << " <input_path> [log_file_path=" << defaultLogFilePath << "]\n";
