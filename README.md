@@ -4,7 +4,7 @@
 A C++ program to shred files and folders securely.
 
 **Requirements -:**
- - A compiler supporting C++ 11
+ - A compiler supporting C++11
  - The [Boost][1] [filesystem][2] library.
  
 ***Features -:***
