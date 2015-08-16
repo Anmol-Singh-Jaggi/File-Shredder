@@ -1,13 +1,11 @@
 #File-Shredder
-=============
-
-A C++ program to shred files and folders securely.
+An application to shred files and folders securely.
 
 **Requirements -:**
  - A compiler supporting C++11
  - The [Boost][1] [filesystem][2] library.
  
-***Features -:***
+**Features -:**
  - Renames files to random strings before shredding them.
  - Asks for confirmation before shredding a file.
  - Creates a log entry for every file being shredded.
