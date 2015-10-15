@@ -11,8 +11,55 @@
 using namespace std;
 using namespace boost::filesystem;
 
-static ofstream Log;
-static stringstream LogErrorStream;  // Buffer soft errors to output them separately after the informational messages in the log file.
+// File handles for log files
+static ofstream logError, logInfo;
+
+typedef unsigned long long ULL;
+
+// Returns the number of files in the input directory
+// The progress status is printed after every `milestone` files are visited.
+// Here "file" refers to regular files
+ULL GetNumberOfFiles( const path& inputPath = ".", const ULL& milestone = 1000 )
+{
+	if ( !is_directory( inputPath ) )
+	{
+		return 1;
+	}
+
+	ULL numberOfFiles = 0;
+	if ( milestone == 0 )
+	{
+		numberOfFiles = std::distance( recursive_directory_iterator( inputPath ), recursive_directory_iterator() );
+	}
+	else
+	{
+		ULL filesVisitedIterator = 0;
+		for ( recursive_directory_iterator it( inputPath ); it != recursive_directory_iterator(); ++it )
+		{
+			if ( is_regular_file( *it ) )
+			{
+				filesVisitedIterator++;
+				if ( filesVisitedIterator == milestone )
+				{
+					numberOfFiles += filesVisitedIterator;
+					filesVisitedIterator = 0;
+					cout << "\rFiles visited = " << numberOfFiles << std::flush;
+				}
+			}
+		}
+
+		numberOfFiles += filesVisitedIterator;
+		if ( filesVisitedIterator )
+		{
+			cout << "\rFiles visited = " << numberOfFiles << std::flush;
+		}
+
+		cout << endl;
+	}
+
+	return numberOfFiles;
+}
+
 
 // Iterate through a directory and store everything found ( regular files, directories or any other special files ) in the input container
 static void DirectoryIterate( const path& dirPath, vector<path>& dirContents )
@@ -44,9 +91,10 @@ static path RandomRename( const path& inputPath )
 		{
 			boost::system::error_code ec;
 			rename( inputPath, newPath, ec );
-			if ( ec ) // Maybe a reserved filename was generated
+			if ( ec )
 			{
-				LogErrorStream << "Failure in renaming " << absolute( inputPath ) << " to " << absolute( newPath ) << " : " << ec.message() << endl;
+				// Maybe a reserved filename was generated
+				logError << "Failure in renaming " << absolute( inputPath ) << " to " << absolute( newPath ) << " : " << ec.message() << endl;
 			}
 			else // No error
 			{
@@ -66,14 +114,14 @@ static bool WriteRandomData( const path& inputPath )
 	const auto inputFileSize = file_size( inputPath, ec );
 	if ( ec )
 	{
-		LogErrorStream << "Failure in determining the size of " << absolute( inputPath ) << " : "  << ec.message() << endl;
+		logError << "Failure in determining the size of " << absolute( inputPath ) << " : "  << ec.message() << endl;
 		return false;
 	}
 
 	ofstream fout( inputPath.string(), ios::binary );
 	if ( !fout )
 	{
-		LogErrorStream << "Failure in opening " << absolute( inputPath ) << " : " << strerror( errno ) << endl;
+		logError << "Failure in opening " << absolute( inputPath ) << " : " << strerror( errno ) << endl;
 		return false;
 	}
 
@@ -140,7 +188,7 @@ static void ShredFile( const path& inputPath )
 	remove( newPath, ec );
 	if ( ec )
 	{
-		LogErrorStream << "Failure in removing " << newPath << " : " << ec.message() << endl;
+		logError << "Failure in removing " << newPath << " : " << ec.message() << endl;
 	}
 }
 
@@ -148,7 +196,8 @@ static void ShredFile( const path& inputPath )
 // Returns true if the user confirms, false otherwise
 static bool ConfirmShred( const path& inputPath )
 {
-	cout << "Shred " << absolute( inputPath ) << " ? ( y/n ) ";
+	static ULL fileCount = 1;
+	cout << "\n" << fileCount++ << ". Shred " << absolute( inputPath ) << " ?\n( y/n ) ";
 	const bool confirm = ( cin.get() == 'y' );
 
 	// Clear any trailing input
@@ -160,7 +209,7 @@ static bool ConfirmShred( const path& inputPath )
 // Shred a file/folder
 static void Shred( const path& inputPath )
 {
-	Log << absolute( inputPath ) << endl;
+	logInfo << absolute( inputPath ) << endl;
 
 	boost::system::error_code ec;
 	if ( is_directory( inputPath, ec ) )
@@ -172,7 +221,7 @@ static void Shred( const path& inputPath )
 		}
 		catch ( const filesystem_error& ex )
 		{
-			LogErrorStream << ex.what() << endl;
+			logError << ex.what() << endl;
 			return; // Not able to list the directory's contents. No point in proceeding further.
 		}
 
@@ -182,60 +231,71 @@ static void Shred( const path& inputPath )
 		}
 
 		ec.clear();
-		remove( inputPath, ec ); // Remove the input directory itself.. Will fail if not empty
+		// Remove the input directory itself
+		// Will fail if not empty
+		remove( inputPath, ec );
 		if ( ec )
 		{
-			LogErrorStream << "Failure in removing " << absolute( inputPath ) << " : " << ec.message() << endl;
+			logError << "Failure in removing " << absolute( inputPath ) << " : " << ec.message() << endl;
 		}
 	}
-	else if ( !ec ) // input is a file
+	// input is a file
+	else if ( !ec )
 	{
 		if ( ConfirmShred( inputPath ) )
 		{
+			logInfo << "Shredding " << absolute( inputPath ) << endl;
 			ShredFile( inputPath );
 		}
 		else
 		{
-			Log << "Skipping " << absolute( inputPath ) << endl;
+			logInfo << "Skipping " << absolute( inputPath ) << endl;
 		}
 	}
 	else
 	{
-		LogErrorStream << "Failure in determining if " << absolute( inputPath ) << " is a directory or not : " << ec.message() << endl;
+		logError << "Failure in determining if " << absolute( inputPath ) << " is a directory or not : " << ec.message() << endl;
 	}
 }
 
 int main( int argc, char** argv )
 {
-	const path defaultLogFilePath = "FileShredderLog.txt";
+	path logFolderPath = "./logs";
 
 	if ( argc < 2 )
 	{
-		cout << "Usage : " << argv[0] << " <input_path> [log_file_path=" << defaultLogFilePath << "]\n";
+		cout << "Usage : " << argv[0] << " <input_path> [log_file_folder=" << logFolderPath << "]\n";
 		return -1;
 	}
 
-	const path LogFilePath = ( ( argc >= 3 ) ? path( argv[2] ) :  defaultLogFilePath );
-	Log.open( LogFilePath.string() );
-	if ( !Log )
+	if ( argc > 2 )
 	{
-		cerr << "Error creating " << absolute( LogFilePath ) << " : " << strerror( errno ) << endl;
-		return -1;
+		logFolderPath = path( argv[2] );
+	}
+	try
+	{
+		const path inputPath = canonical( argv[1] );
+
+		create_directories( logFolderPath );
+		const path errorLogPath = logFolderPath / "errors.txt";
+		logError.open( errorLogPath.string() );
+		const path infoLogPath = logFolderPath / "info.txt";
+		logInfo.open( infoLogPath.string() );
+
+		cout << "Calculating number of files to shred ...\n";
+		const ULL filesInInputPath = GetNumberOfFiles( inputPath );
+		cout << "Files to shred = " << filesInInputPath << "\n";
+
+		cout << "\nInitiating the shredding process ...\n\n";
+		Shred( inputPath );
+		cout << "\n\n";
+
+	}
+	catch ( const filesystem_error& ex )
+	{
+		cerr << ex.what() << endl;
+		logError << ex.what() << endl;
 	}
 
-	Shred( argv[1] );
-
-	if ( Log )
-	{
-		if ( LogErrorStream.str().empty() )
-		{
-			cout << "The program ran without any errors.\n";
-		}
-		else
-		{
-			Log << "\nERRORS -:\n\n" << LogErrorStream.str() << endl;
-			cout << "There were some errors during the execution of this program !\n\nCheck " << absolute( LogFilePath ) << " for details.\n";
-			return -1;
-		}
-	}
 }
+
