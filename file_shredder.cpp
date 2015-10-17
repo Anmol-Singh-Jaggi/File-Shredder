@@ -291,7 +291,7 @@ int main( int argc, char** argv )
 		cout << "\n\n";
 
 	}
-	catch ( const filesystem_error& ex )
+	catch ( const exception& ex )
 	{
 		cerr << ex.what() << endl;
 		logError << ex.what() << endl;
