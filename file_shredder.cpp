@@ -277,9 +277,9 @@ int main( int argc, char** argv )
 		const path inputPath = canonical( argv[1] );
 
 		create_directories( logFolderPath );
-		const path errorLogPath = logFolderPath / "errors.txt";
+		const path errorLogPath = logFolderPath / "errors.log";
 		logError.open( errorLogPath.string() );
-		const path infoLogPath = logFolderPath / "info.txt";
+		const path infoLogPath = logFolderPath / "info.log";
 		logInfo.open( infoLogPath.string() );
 
 		cout << "Calculating number of files to shred ...\n";
